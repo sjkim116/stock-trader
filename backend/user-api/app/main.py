@@ -14,7 +14,7 @@ from app.api.v1 import health
 # Configure logging
 logging.basicConfig(
     level=logging.INFO if settings.ENVIRONMENT != "development" else logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,7 @@ app.add_middleware(
 # Include routers
 app.include_router(health.router, tags=["Health"])
 
+
 # Root endpoint
 @app.get("/")
 async def root():
@@ -47,8 +48,9 @@ async def root():
         "service": "AlgoTrader Pro User API",
         "version": "0.1.0",
         "environment": settings.ENVIRONMENT,
-        "status": "running"
+        "status": "running",
     }
+
 
 # Exception handlers
 @app.exception_handler(Exception)
@@ -59,9 +61,12 @@ async def global_exception_handler(request, exc):
         status_code=500,
         content={
             "detail": "Internal server error",
-            "error": str(exc) if settings.ENVIRONMENT == "development" else "An error occurred"
-        }
+            "error": str(exc)
+            if settings.ENVIRONMENT == "development"
+            else "An error occurred",
+        },
     )
+
 
 # Startup event
 @app.on_event("startup")
@@ -74,6 +79,7 @@ async def startup_event():
     # TODO: Initialize Redis connection
     # TODO: Load strategies from database
 
+
 # Shutdown event
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -83,11 +89,13 @@ async def shutdown_event():
     # TODO: Close database connections
     # TODO: Close Redis connections
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=settings.ENVIRONMENT == "development"
+        reload=settings.ENVIRONMENT == "development",
     )

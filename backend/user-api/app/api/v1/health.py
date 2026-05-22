@@ -20,7 +20,7 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "service": "user-api",
-        "environment": os.getenv("ENVIRONMENT", "unknown")
+        "environment": os.getenv("ENVIRONMENT", "unknown"),
     }
 
 
@@ -31,7 +31,7 @@ async def detailed_health_check():
     """
     cpu_percent = psutil.cpu_percent(interval=1)
     memory = psutil.virtual_memory()
-    disk = psutil.disk_usage('/')
+    disk = psutil.disk_usage("/")
 
     return {
         "status": "healthy",
@@ -43,12 +43,12 @@ async def detailed_health_check():
             "memory_percent": memory.percent,
             "memory_available_mb": memory.available / (1024 * 1024),
             "disk_percent": disk.percent,
-            "disk_free_gb": disk.free / (1024 * 1024 * 1024)
+            "disk_free_gb": disk.free / (1024 * 1024 * 1024),
         },
         "dependencies": {
             "database": "unknown",  # TODO: Add database health check
-            "redis": "unknown",     # TODO: Add Redis health check
-        }
+            "redis": "unknown",  # TODO: Add Redis health check
+        },
     }
 
 
