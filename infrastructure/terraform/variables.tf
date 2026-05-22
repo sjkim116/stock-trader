@@ -143,6 +143,25 @@ variable "alb_deletion_protection" {
   default     = false
 }
 
+# TimescaleDB EC2 Variables
+variable "timescaledb_instance_type" {
+  description = "EC2 instance type for the TimescaleDB host"
+  type        = string
+  default     = "r6i.large"
+}
+
+variable "timescaledb_data_volume_size_gb" {
+  description = "Initial size in GB of the gp3 data volume backing TimescaleDB"
+  type        = number
+  default     = 200
+}
+
+variable "timescaledb_snapshot_retention_count" {
+  description = "Number of daily DLM snapshots to retain for the data volume"
+  type        = number
+  default     = 14
+}
+
 # GitHub Actions OIDC
 variable "github_repository" {
   description = "GitHub repository in OWNER/REPO form for OIDC role trust. Empty disables the OIDC role."

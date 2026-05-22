@@ -49,6 +49,27 @@ output "redis_primary_endpoint" {
   value       = module.elasticache.primary_endpoint_address
 }
 
+output "timescaledb_endpoint" {
+  description = "TimescaleDB connection host"
+  value       = module.timescaledb.endpoint
+}
+
+output "timescaledb_port" {
+  description = "TimescaleDB port"
+  value       = module.timescaledb.port
+}
+
+output "timescaledb_db_name" {
+  description = "TimescaleDB initial database name"
+  value       = module.timescaledb.db_name
+}
+
+output "timescaledb_credentials_secret_arn" {
+  description = "Secrets Manager ARN for TimescaleDB master credentials"
+  value       = module.timescaledb.credentials_secret_arn
+  sensitive   = true
+}
+
 output "redis_auth_secret_arn" {
   description = "Secrets Manager ARN for Redis AUTH token (null when AUTH disabled)"
   value       = module.elasticache.auth_token_secret_arn

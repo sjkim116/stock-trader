@@ -1,10 +1,9 @@
-# RDS PostgreSQL module.
+# RDS PostgreSQL module — OLTP tables only.
 #
-# Note: AWS RDS does NOT support the TimescaleDB extension. The local stack
-# uses timescale/timescaledb:pg15 for hypertable features, but the cloud
-# deployment runs plain PostgreSQL here. Hypertable strategy for production
-# (EC2 self-hosted, Timescale Cloud, or partman-based partitioning on RDS)
-# is an open decision deferred past this module.
+# AWS RDS does not ship the TimescaleDB extension, so the time-series
+# tables (market_data, quote_data) live on a self-managed TimescaleDB host
+# provisioned by modules/timescaledb_ec2. The OLTP schema in
+# database/schema_oltp.sql targets this instance.
 
 terraform {
   required_providers {

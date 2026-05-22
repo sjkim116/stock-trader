@@ -37,10 +37,10 @@ locals {
 
   secret_map = merge(local.base_secrets, var.additional_secret_environment_variables)
 
-  secret_arns = distinct(compact([
+  secret_arns = distinct(compact(concat([
     var.database_secret_arn,
     var.redis_auth_secret_arn,
-  ]))
+  ], var.additional_secret_arns)))
 }
 
 resource "aws_ecs_cluster" "this" {

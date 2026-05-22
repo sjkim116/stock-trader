@@ -158,6 +158,12 @@ variable "additional_secret_environment_variables" {
   default     = {}
 }
 
+variable "additional_secret_arns" {
+  description = "Extra Secrets Manager ARNs the task execution role can GetSecretValue on. Required when additional_secret_environment_variables references secrets outside the base RDS/Redis ones."
+  type        = list(string)
+  default     = []
+}
+
 variable "log_retention_days" {
   description = "Retention in days for the task log group"
   type        = number
