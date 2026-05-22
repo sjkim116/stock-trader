@@ -1,0 +1,14 @@
+[flake8]
+max-line-length = 88
+extend-ignore =
+    # Slice spacing — black puts spaces around colons in slices
+    E203,
+    # Line break before binary operator — modern style, black-compatible
+    W503,
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    build,
+    dist,
