@@ -2,40 +2,49 @@
 Health check endpoints
 """
 
-from fastapi import APIRouter, status
-from datetime import datetime
-import psutil
 import os
+from datetime import datetime, timezone
+
+import psutil
+from fastapi import APIRouter, Response, status
+
+from app.core.db import ping_oltp, ping_ts
 
 router = APIRouter()
 
 
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 @router.get("/health", status_code=status.HTTP_200_OK)
 async def health_check():
-    """
-    Health check endpoint
-    Returns system health status
-    """
+    """Liveness-style endpoint: process is up. Does not touch dependencies."""
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": _now_iso(),
         "service": "user-api",
         "environment": os.getenv("ENVIRONMENT", "unknown"),
     }
 
 
-@router.get("/health/detailed", status_code=status.HTTP_200_OK)
-async def detailed_health_check():
-    """
-    Detailed health check with system metrics
-    """
+@router.get("/health/detailed")
+async def detailed_health_check(response: Response):
+    """System metrics + dependency pings. Returns 503 if any DB is down."""
     cpu_percent = psutil.cpu_percent(interval=1)
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
 
+    oltp_ok = await ping_oltp()
+    ts_ok = await ping_ts()
+    overall = "healthy" if oltp_ok and ts_ok else "degraded"
+
+    if not (oltp_ok and ts_ok):
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
     return {
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "status": overall,
+        "timestamp": _now_iso(),
         "service": "user-api",
         "environment": os.getenv("ENVIRONMENT", "unknown"),
         "system": {
@@ -46,24 +55,33 @@ async def detailed_health_check():
             "disk_free_gb": disk.free / (1024 * 1024 * 1024),
         },
         "dependencies": {
-            "database": "unknown",  # TODO: Add database health check
-            "redis": "unknown",  # TODO: Add Redis health check
+            "database_oltp": "up" if oltp_ok else "down",
+            "database_timescaledb": "up" if ts_ok else "down",
+            "redis": "unknown",  # TODO: wire Redis ping when client is added
         },
     }
 
 
-@router.get("/ready", status_code=status.HTTP_200_OK)
-async def readiness_check():
-    """
-    Kubernetes/ECS readiness probe
-    """
-    # TODO: Add checks for database and Redis connectivity
-    return {"status": "ready"}
+@router.get("/ready")
+async def readiness_check(response: Response):
+    """Readiness probe — both DBs must be reachable before we accept traffic."""
+    oltp_ok = await ping_oltp()
+    ts_ok = await ping_ts()
+    ready = oltp_ok and ts_ok
+
+    if not ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+    return {
+        "status": "ready" if ready else "not_ready",
+        "checks": {
+            "database_oltp": oltp_ok,
+            "database_timescaledb": ts_ok,
+        },
+    }
 
 
 @router.get("/live", status_code=status.HTTP_200_OK)
 async def liveness_check():
-    """
-    Kubernetes/ECS liveness probe
-    """
+    """Liveness probe — process is alive even if dependencies aren't."""
     return {"status": "alive"}
