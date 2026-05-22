@@ -51,11 +51,21 @@ services:
       dockerfile: Dockerfile
     container_name: algotrader-user-api
     environment:
-      DATABASE_URL: postgresql://algotrader:dev_password_change_me@postgres:5432/algotrader
+      # OLTP DB (RDS in cloud) — locally points at the same container
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: algotrader
+      DATABASE_USERNAME: algotrader
+      DATABASE_PASSWORD: dev_password_change_me
+      # Time-series DB (EC2 TimescaleDB in cloud) — locally same container
+      TIMESCALEDB_HOST: postgres
+      TIMESCALEDB_PORT: 5432
+      TIMESCALEDB_NAME: algotrader
+      TIMESCALEDB_USERNAME: algotrader
+      TIMESCALEDB_PASSWORD: dev_password_change_me
       REDIS_URL: redis://:dev_password_change_me@redis:6379
       ENVIRONMENT: development
       AWS_REGION: ap-northeast-2
-      # Add more environment variables as needed
     ports:
       - "8000:8000"
     depends_on:
