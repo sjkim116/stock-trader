@@ -124,6 +124,21 @@ jobs:
     name: Test Market Data Collector
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg15
+        env:
+          POSTGRES_USER: algotrader
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: algotrader_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -146,6 +161,13 @@ jobs:
 
       - name: Run tests
         working-directory: ./backend/market-data-collector
+        env:
+          DATABASE_HOST: localhost
+          DATABASE_PORT: 5432
+          DATABASE_NAME: algotrader_test
+          DATABASE_USERNAME: algotrader
+          DATABASE_PASSWORD: test_password
+          ENVIRONMENT: test
         run: |
           if [ -n "$(find . -name '*_test.go' -print -quit)" ]; then
             go test -v -race -coverprofile=coverage.out ./...

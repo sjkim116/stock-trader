@@ -79,20 +79,30 @@ services:
     networks:
       - algotrader-network
 
-  # Market Data Collector (Go) - 개발 시 필요
-  # market-data-collector:
-  #   build:
-  #     context: ./backend/market-data-collector
-  #     dockerfile: Dockerfile
-  #   container_name: algotrader-market-data
-  #   environment:
-  #     DATABASE_URL: postgresql://algotrader:dev_password_change_me@postgres:5432/algotrader
-  #     REDIS_URL: redis://:dev_password_change_me@redis:6379
-  #   depends_on:
-  #     - postgres
-  #     - redis
-  #   networks:
-  #     - algotrader-network
+  # Market Data Collector (Go)
+  market-data-collector:
+    build:
+      context: ./backend/market-data-collector
+      dockerfile: Dockerfile
+    container_name: algotrader-market-data
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: algotrader
+      DATABASE_USERNAME: algotrader
+      DATABASE_PASSWORD: dev_password_change_me
+      REDIS_URL: redis://:dev_password_change_me@redis:6379
+      ENVIRONMENT: development
+      HEALTH_CHECK_PORT: "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - algotrader-network
 
   # Strategy Engine - 개발 시 필요
   # strategy-engine:
