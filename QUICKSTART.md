@@ -243,7 +243,8 @@ docker-compose exec user-api bash
 docker-compose exec postgres psql -U algotrader -d algotrader
 
 # 데이터베이스 스키마 적용
-docker-compose exec postgres psql -U algotrader -d algotrader -f /docker-entrypoint-initdb.d/01-schema.sql
+docker-compose exec postgres psql -U algotrader -d algotrader -f /docker-entrypoint-initdb.d/01-schema-oltp.sql
+docker-compose exec postgres psql -U algotrader -d algotrader -f /docker-entrypoint-initdb.d/02-schema-timeseries.sql
 
 # 코드 포맷팅 (Backend)
 cd backend/user-api

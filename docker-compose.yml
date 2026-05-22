@@ -14,7 +14,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      # In production the schema is split across two DBs (RDS for OLTP,
+      # EC2 TimescaleDB for time-series). Locally we load both into one DB
+      # for convenience; idempotent type creation keeps that safe.
+      - ./database/schema_oltp.sql:/docker-entrypoint-initdb.d/01-schema-oltp.sql
+      - ./database/schema_timeseries.sql:/docker-entrypoint-initdb.d/02-schema-timeseries.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U algotrader"]
       interval: 10s

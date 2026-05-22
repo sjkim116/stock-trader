@@ -1,12 +1,12 @@
--- AlgoTrader Pro - Database Schema
--- PostgreSQL 15+ with TimescaleDB extension
--- Created: 2026-05-14
+-- AlgoTrader Pro - OLTP schema (RDS PostgreSQL).
+-- Time-series tables (market_data, quote_data) live in schema_timeseries.sql,
+-- which runs on the EC2 TimescaleDB instance. See infrastructure/terraform/
+-- modules/timescaledb_ec2 for the rationale and modules/rds for this target.
+-- PostgreSQL 15+
+-- Last updated: 2026-05-22
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Enable TimescaleDB extension (for time-series data)
-CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 -- ================================================================
 -- 1. Users & Authentication
@@ -44,7 +44,14 @@ CREATE INDEX idx_users_created_at ON users(created_at DESC);
 -- ================================================================
 
 CREATE TYPE broker_type AS ENUM ('kis', 'xing', 'ib', 'alpaca');
-CREATE TYPE market_type AS ENUM ('kr', 'us');
+-- market_type is also used by time-series schema; idempotent create lets both
+-- files load into a single DB locally without conflict.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'market_type') THEN
+        CREATE TYPE market_type AS ENUM ('kr', 'us');
+    END IF;
+END$$;
 CREATE TYPE account_status AS ENUM ('connected', 'disconnected', 'error');
 
 CREATE TABLE accounts (
@@ -272,79 +279,7 @@ CREATE INDEX idx_trades_symbol ON trades(symbol);
 CREATE INDEX idx_trades_executed_at ON trades(executed_at DESC);
 
 -- ================================================================
--- 8. Market Data (Time-series) - TimescaleDB Hypertable
--- ================================================================
-
-CREATE TYPE data_interval AS ENUM ('tick', '1s', '1m', '5m', '15m', '1h', '1d');
-
-CREATE TABLE market_data (
-    time TIMESTAMP WITH TIME ZONE NOT NULL,
-    symbol VARCHAR(20) NOT NULL,
-    market market_type NOT NULL,
-    interval data_interval NOT NULL,
-
-    open DECIMAL(15, 4),
-    high DECIMAL(15, 4),
-    low DECIMAL(15, 4),
-    close DECIMAL(15, 4),
-    volume BIGINT,
-
-    PRIMARY KEY (time, symbol, interval)
-);
-
--- Convert to TimescaleDB hypertable (time-series optimization)
-SELECT create_hypertable('market_data', 'time');
-
--- Create indexes
-CREATE INDEX idx_market_data_symbol_time ON market_data (symbol, time DESC);
-CREATE INDEX idx_market_data_interval ON market_data (interval);
-
--- Compression policy (compress data older than 7 days)
-ALTER TABLE market_data SET (
-    timescaledb.compress,
-    timescaledb.compress_segmentby = 'symbol,interval'
-);
-
-SELECT add_compression_policy('market_data', INTERVAL '7 days');
-
--- Retention policy (drop data older than 2 years)
-SELECT add_retention_policy('market_data', INTERVAL '2 years');
-
--- ================================================================
--- 9. Quote Data (호가 데이터) - TimescaleDB Hypertable
--- ================================================================
-
-CREATE TABLE quote_data (
-    time TIMESTAMP WITH TIME ZONE NOT NULL,
-    symbol VARCHAR(20) NOT NULL,
-    market market_type NOT NULL,
-
-    -- Best bid/ask
-    bid_price DECIMAL(15, 4),
-    bid_size INTEGER,
-    ask_price DECIMAL(15, 4),
-    ask_size INTEGER,
-
-    -- Full orderbook (top 10)
-    bids JSONB,  -- [{price, size}, ...]
-    asks JSONB,
-
-    PRIMARY KEY (time, symbol)
-);
-
-SELECT create_hypertable('quote_data', 'time');
-CREATE INDEX idx_quote_data_symbol_time ON quote_data (symbol, time DESC);
-
--- Compression and retention (shorter retention for quote data)
-ALTER TABLE quote_data SET (
-    timescaledb.compress,
-    timescaledb.compress_segmentby = 'symbol'
-);
-SELECT add_compression_policy('quote_data', INTERVAL '1 day');
-SELECT add_retention_policy('quote_data', INTERVAL '30 days');
-
--- ================================================================
--- 10. Backtesting Results
+-- 8. Backtesting Results
 -- ================================================================
 
 CREATE TYPE backtest_status AS ENUM ('pending', 'running', 'completed', 'failed');
@@ -391,7 +326,7 @@ CREATE INDEX idx_backtest_results_status ON backtest_results(status);
 CREATE INDEX idx_backtest_results_created_at ON backtest_results(created_at DESC);
 
 -- ================================================================
--- 11. Notifications (알림)
+-- 9. Notifications (알림)
 -- ================================================================
 
 CREATE TYPE notification_type AS ENUM ('order_filled', 'stop_loss_triggered', 'take_profit_triggered',
@@ -421,7 +356,7 @@ CREATE INDEX idx_notifications_status ON notifications(status);
 CREATE INDEX idx_notifications_created_at ON notifications(created_at DESC);
 
 -- ================================================================
--- 12. Audit Logs (감사 로그)
+-- 10. Audit Logs (감사 로그)
 -- ================================================================
 
 CREATE TYPE audit_action AS ENUM ('create', 'update', 'delete', 'login', 'logout', 'order_placed', 'order_cancelled');
@@ -533,5 +468,5 @@ WHERE t.pnl IS NOT NULL
 GROUP BY a.user_id, DATE(t.executed_at);
 
 -- ================================================================
--- End of Schema
+-- End of OLTP Schema
 -- ================================================================

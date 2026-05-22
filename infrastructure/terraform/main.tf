@@ -106,6 +106,10 @@ resource "aws_security_group" "redis" {
   }
 }
 
+# TimescaleDB EC2 ingress is owned by the timescaledb_ec2 module (it manages
+# its own SG and per-client ingress rules), so no aws_security_group resource
+# is declared here.
+
 # S3 Bucket for Logs
 resource "aws_s3_bucket" "logs" {
   bucket = "${var.project_name}-logs-${var.environment}-${data.aws_caller_identity.current.account_id}"
@@ -187,6 +191,20 @@ module "elasticache" {
   num_cache_clusters = var.redis_num_cache_clusters
 }
 
+module "timescaledb" {
+  source = "./modules/timescaledb_ec2"
+
+  project_name              = var.project_name
+  environment               = var.environment
+  vpc_id                    = module.vpc.vpc_id
+  subnet_id                 = module.vpc.private_subnet_ids[0]
+  client_security_group_ids = [aws_security_group.ecs_tasks.id]
+
+  instance_type            = var.timescaledb_instance_type
+  data_volume_size_gb      = var.timescaledb_data_volume_size_gb
+  snapshot_retention_count = var.timescaledb_snapshot_retention_count
+}
+
 module "alb" {
   source = "./modules/alb"
 
@@ -229,6 +247,19 @@ module "ecs_user_api" {
   redis_port            = module.elasticache.port
   redis_tls_enabled     = module.elasticache.tls_enabled
   redis_auth_secret_arn = module.elasticache.auth_token_secret_arn != null ? module.elasticache.auth_token_secret_arn : ""
+
+  additional_environment_variables = {
+    TIMESCALEDB_HOST     = module.timescaledb.endpoint
+    TIMESCALEDB_PORT     = tostring(module.timescaledb.port)
+    TIMESCALEDB_NAME     = module.timescaledb.db_name
+    TIMESCALEDB_USERNAME = module.timescaledb.db_username
+  }
+
+  additional_secret_environment_variables = {
+    TIMESCALEDB_PASSWORD = "${module.timescaledb.credentials_secret_arn}:password::"
+  }
+
+  additional_secret_arns = [module.timescaledb.credentials_secret_arn]
 }
 
 # GitHub Actions OIDC role — only when github_repository is set

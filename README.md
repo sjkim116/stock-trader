@@ -84,7 +84,8 @@ stock-trader/
 │   └── risk-manager/            # Python - 리스크 관리
 ├── frontend/                    # React 웹 대시보드
 ├── database/                    # 데이터베이스 스키마
-│   └── schema.sql
+│   ├── schema_oltp.sql          # RDS PostgreSQL (users, orders, ...)
+│   └── schema_timeseries.sql    # EC2 TimescaleDB (market_data, quote_data)
 ├── infrastructure/              # Terraform IaC
 │   └── terraform/
 │       ├── modules/
@@ -189,7 +190,7 @@ GitHub Actions를 통한 자동 배포:
 3. [시스템 아키텍처](architecture/system-architecture.md)
 4. [AWS 인프라 설계](architecture/aws-infrastructure.md)
 5. [기술 스택](tech-stack.md)
-6. [데이터베이스 스키마](database/schema.sql)
+6. 데이터베이스 스키마: [OLTP (RDS)](database/schema_oltp.sql) · [Time-series (TimescaleDB)](database/schema_timeseries.sql)
 7. [6개월 개발 로드맵](roadmap.md)
 
 ### API 문서

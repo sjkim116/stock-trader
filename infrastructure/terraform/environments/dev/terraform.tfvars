@@ -36,6 +36,6 @@ alb_deletion_protection   = false
 rds_max_allocated_storage = 50
 
 # GitHub Actions OIDC
-github_repository          = "sjkim116/stock-trader"
-github_oidc_allowed_refs   = ["refs/heads/main"]
+github_repository           = "sjkim116/stock-trader"
+github_oidc_allowed_refs    = ["refs/heads/main"]
 github_oidc_create_provider = true
