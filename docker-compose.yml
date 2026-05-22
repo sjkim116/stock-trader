@@ -1,0 +1,150 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    container_name: algotrader-postgres
+    environment:
+      POSTGRES_USER: algotrader
+      POSTGRES_PASSWORD: dev_password_change_me
+      POSTGRES_DB: algotrader
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U algotrader"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - algotrader-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: algotrader-redis
+    command: redis-server --appendonly yes --requirepass dev_password_change_me
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - algotrader-network
+
+  # User API Service (FastAPI)
+  user-api:
+    build:
+      context: ./backend/user-api
+      dockerfile: Dockerfile
+    container_name: algotrader-user-api
+    environment:
+      DATABASE_URL: postgresql://algotrader:dev_password_change_me@postgres:5432/algotrader
+      REDIS_URL: redis://:dev_password_change_me@redis:6379
+      ENVIRONMENT: development
+      AWS_REGION: ap-northeast-2
+      # Add more environment variables as needed
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/user-api:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - algotrader-network
+
+  # Market Data Collector (Go) - 개발 시 필요
+  # market-data-collector:
+  #   build:
+  #     context: ./backend/market-data-collector
+  #     dockerfile: Dockerfile
+  #   container_name: algotrader-market-data
+  #   environment:
+  #     DATABASE_URL: postgresql://algotrader:dev_password_change_me@postgres:5432/algotrader
+  #     REDIS_URL: redis://:dev_password_change_me@redis:6379
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #   networks:
+  #     - algotrader-network
+
+  # Strategy Engine - 개발 시 필요
+  # strategy-engine:
+  #   build:
+  #     context: ./backend/strategy-engine
+  #     dockerfile: Dockerfile
+  #   container_name: algotrader-strategy
+  #   environment:
+  #     DATABASE_URL: postgresql://algotrader:dev_password_change_me@postgres:5432/algotrader
+  #     REDIS_URL: redis://:dev_password_change_me@redis:6379
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #   networks:
+  #     - algotrader-network
+
+  # Frontend (React) - 로컬 개발 시
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile.dev
+  #   container_name: algotrader-frontend
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+  #   environment:
+  #     - VITE_API_URL=http://localhost:8000
+  #   networks:
+  #     - algotrader-network
+
+  # PgAdmin (Optional - DB 관리 도구)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: algotrader-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@algotrader.dev
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - algotrader-network
+
+  # Redis Commander (Optional - Redis 관리 도구)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: algotrader-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:dev_password_change_me
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - algotrader-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  algotrader-network:
+    driver: bridge

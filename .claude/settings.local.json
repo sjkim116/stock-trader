@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell *)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(docker info *)",
+      "Bash(findstr /C:\"Server Version\" /C:\"Cannot connect\")",
+      "PowerShell(Test-Path *)",
+      "PowerShell(winget *)",
+      "Bash(docker-compose --version)",
+      "Bash(findstr /I \"schema CREATE ERROR FATAL ready\")",
+      "Bash(docker exec algotrader-postgres *)",
+      "Bash(docker exec *)",
+      "Bash(Start-Sleep -Seconds 3)",
+      "Bash(nHTTP %{http_code})",
+      "Bash(curl -s -o - -w \"`nHTTP %{http_code}`n\" http://localhost:8000/health)",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" http://localhost:8000/health)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:8000/docs)",
+      "Bash(curl -s http://localhost:8000/health/detailed)",
+      "Bash(curl -s -o /dev/null -w \"pgAdmin :5050 → HTTP %{http_code}\\\\n\" http://localhost:5050/)",
+      "Bash(curl -s -o /dev/null -w \"Redis Commander :8081 → HTTP %{http_code}\\\\n\" http://localhost:8081/)",
+      "Bash(terraform version *)",
+      "PowerShell(Get-Command *)",
+      "Bash(docker pull *)"
+    ]
+  }
+}
