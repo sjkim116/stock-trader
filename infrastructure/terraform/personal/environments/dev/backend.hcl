@@ -1,4 +1,4 @@
-bucket         = "algotrader-terraform-state"
+bucket         = "algotrader-tfstate-722765870794"
 key            = "personal/dev/terraform.tfstate"
 region         = "ap-northeast-2"
 dynamodb_table = "algotrader-terraform-locks"
