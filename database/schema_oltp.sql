@@ -381,6 +381,23 @@ CREATE INDEX idx_audit_logs_action ON audit_logs(action);
 CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
 
 -- ================================================================
+-- 11. Kill Switch (긴급 정지 플래그)
+-- ================================================================
+-- Per-user emergency stop. When enabled=TRUE, SafetyGuard refuses every
+-- order regardless of strategy or limits. Set by the user manually or
+-- triggered automatically (e.g. daily loss limit reached).
+
+CREATE TABLE kill_switch (
+    user_id UUID PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    reason TEXT,
+    triggered_at TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_kill_switch_enabled ON kill_switch(enabled) WHERE enabled = TRUE;
+
+-- ================================================================
 -- Triggers for updated_at
 -- ================================================================
 
@@ -405,6 +422,9 @@ CREATE TRIGGER update_user_strategies_updated_at BEFORE UPDATE ON user_strategie
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_positions_updated_at BEFORE UPDATE ON positions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_kill_switch_updated_at BEFORE UPDATE ON kill_switch
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ================================================================
