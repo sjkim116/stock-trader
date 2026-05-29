@@ -10,9 +10,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.v1 import health, trading
+from app.api.v1 import health, strategies, trading
 from app.core import db
 from app.core.config import settings
+from app.strategies.market_history import MarketDataHistory
+from app.strategies.runner import StrategyRunner
 from app.trading import runtime as trading_runtime
 
 logging.basicConfig(
@@ -32,6 +34,17 @@ async def lifespan(_: FastAPI):
     )
     await db.init_engines()
     await trading_runtime.init_runtime()
+
+    # Strategy runner uses the TS DB for price history and the existing
+    # SafetyGuard singleton for order placement. Registrations start
+    # empty — clients add strategies via POST /strategies/register.
+    history = MarketDataHistory(db.TsSession)
+    runner = StrategyRunner(
+        safety_guard=trading_runtime.get_safety_guard(),
+        history=history,
+    )
+    trading_runtime.set_strategy_runner(runner)
+
     try:
         yield
     finally:
@@ -59,6 +72,7 @@ app.add_middleware(
 
 app.include_router(health.router, tags=["Health"])
 app.include_router(trading.router, prefix=settings.API_V1_PREFIX)
+app.include_router(strategies.router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/")
