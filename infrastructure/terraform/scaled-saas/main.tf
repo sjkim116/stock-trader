@@ -2,7 +2,7 @@
 
 # VPC Module
 module "vpc" {
-  source = "./modules/vpc"
+  source = "../modules/vpc"
 
   project_name       = var.project_name
   environment        = var.environment
@@ -151,7 +151,7 @@ resource "aws_s3_bucket_public_access_block" "logs" {
 # -----------------------------------------------------------------------------
 
 module "ecr" {
-  source = "./modules/ecr"
+  source = "../modules/ecr"
 
   project_name = var.project_name
   environment  = var.environment
@@ -162,7 +162,7 @@ module "ecr" {
 }
 
 module "rds" {
-  source = "./modules/rds"
+  source = "../modules/rds"
 
   project_name       = var.project_name
   environment        = var.environment
@@ -180,7 +180,7 @@ module "rds" {
 }
 
 module "elasticache" {
-  source = "./modules/elasticache"
+  source = "../modules/elasticache"
 
   project_name       = var.project_name
   environment        = var.environment
@@ -192,7 +192,7 @@ module "elasticache" {
 }
 
 module "timescaledb" {
-  source = "./modules/timescaledb_ec2"
+  source = "../modules/timescaledb_ec2"
 
   project_name              = var.project_name
   environment               = var.environment
@@ -206,7 +206,7 @@ module "timescaledb" {
 }
 
 module "alb" {
-  source = "./modules/alb"
+  source = "../modules/alb"
 
   project_name       = var.project_name
   environment        = var.environment
@@ -221,7 +221,7 @@ module "alb" {
 }
 
 module "ecs_user_api" {
-  source = "./modules/ecs"
+  source = "../modules/ecs"
 
   project_name       = var.project_name
   environment        = var.environment
@@ -265,7 +265,7 @@ module "ecs_user_api" {
 # GitHub Actions OIDC role — only when github_repository is set
 module "github_oidc" {
   count  = var.github_repository != "" ? 1 : 0
-  source = "./modules/github_oidc"
+  source = "../modules/github_oidc"
 
   project_name         = var.project_name
   environment          = var.environment
