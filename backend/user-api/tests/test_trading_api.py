@@ -39,7 +39,7 @@ def reset_runtime():
     )
     original_init = runtime.init_runtime
 
-    def init_with_defaults(**kwargs):
+    async def init_with_defaults(**kwargs):
         kwargs.setdefault("market_data", md)
         kwargs.setdefault(
             "broker_config",
@@ -50,7 +50,7 @@ def reset_runtime():
                 sell_tax_rate=Decimal("0"),
             ),
         )
-        return original_init(**kwargs)
+        return await original_init(**kwargs)
 
     runtime.init_runtime = init_with_defaults  # type: ignore[assignment]
     try:

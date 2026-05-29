@@ -14,7 +14,8 @@ In local docker-compose both DSNs resolve to the same container; in cloud
 they point to different hosts.
 """
 
-from typing import List
+from typing import List, Optional
+from uuid import UUID
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
@@ -66,6 +67,12 @@ class Settings(BaseSettings):
 
     # SQL echo is helpful while developing endpoints; keep off in tests/prod.
     DB_ECHO: bool = False
+
+    # ---------------------------------------------------------- Paper trading
+    # When set, the in-memory PaperBroker writes through to the OLTP DB
+    # so positions / cash / fills survive process restarts. Leave unset
+    # for ephemeral test runs and fresh local stacks.
+    PAPER_TRADING_USER_ID: Optional[UUID] = None
 
     # ------------------------------------------------------------------ Redis
     REDIS_URL: str = "redis://:dev_password_change_me@localhost:6379"
