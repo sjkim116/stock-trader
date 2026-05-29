@@ -18,12 +18,15 @@ favourable environment than reality.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Dict, List, Optional
+from uuid import UUID
 
 from app.trading.broker import OrderRejectedError
 from app.trading.market_data import MarketDataSource, MissingPriceError
+from app.trading.paper_repo import PaperAccountState, PaperRepo
 from app.trading.types import (
     AccountInfo,
     Fill,
@@ -33,6 +36,8 @@ from app.trading.types import (
     OrderType,
     Position,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -55,7 +60,13 @@ class PaperBroker:
         self,
         market_data: MarketDataSource,
         config: Optional[PaperBrokerConfig] = None,
+        *,
+        repo: Optional[PaperRepo] = None,
+        user_id: Optional[UUID] = None,
     ) -> None:
+        # repo + user_id are paired — one without the other is a misconfig.
+        if (repo is None) != (user_id is None):
+            raise ValueError("repo and user_id must be set together (or both None)")
         self._md = market_data
         self._cfg = config or PaperBrokerConfig()
         self._cash: Decimal = self._cfg.starting_cash
@@ -64,6 +75,32 @@ class PaperBroker:
         self._realized_pnl_today: Decimal = Decimal("0")
         self._lock = asyncio.Lock()
         self._broker_seq = 0
+        self._repo: Optional[PaperRepo] = repo
+        self._user_id: Optional[UUID] = user_id
+
+    async def load_from_db(self) -> None:
+        """Restore cash + positions from the repository. Idempotent — if
+        no row exists for the user (first-ever run) we keep the
+        starting_cash from config so the next fill writes a fresh row."""
+        if self._repo is None or self._user_id is None:
+            return
+        async with self._lock:
+            state = await self._repo.load_state(self._user_id)
+            if state.account is not None:
+                self._cash = state.account.cash
+                self._realized_pnl_today = state.account.realized_pnl_today
+                logger.info(
+                    "Restored paper account for user_id=%s: cash=%s pnl_today=%s",
+                    self._user_id,
+                    self._cash,
+                    self._realized_pnl_today,
+                )
+            self._positions = dict(state.positions)
+            logger.info(
+                "Restored %d position(s) for user_id=%s",
+                len(self._positions),
+                self._user_id,
+            )
 
     # ---------------------------------------------------------------- Broker
     async def submit_order(self, order: Order) -> Order:
@@ -124,16 +161,33 @@ class PaperBroker:
         order.status = OrderStatus.FILLED
         order.submitted_at = order.created_at
 
-        self._fills.append(
-            Fill(
-                order_id=order.order_id,
-                symbol=order.symbol,
-                side=order.side,
-                quantity=order.quantity,
-                price=fill_price,
-                commission=commission + sell_tax,
-            )
+        fill = Fill(
+            order_id=order.order_id,
+            symbol=order.symbol,
+            side=order.side,
+            quantity=order.quantity,
+            price=fill_price,
+            commission=commission + sell_tax,
         )
+        self._fills.append(fill)
+
+        if self._repo is not None and self._user_id is not None:
+            # Write-through after the in-memory mutation succeeded so the
+            # DB always reflects the broker's truth. If the DB write
+            # fails the in-memory state is still consistent — the next
+            # restart will see the older snapshot until catch-up logic
+            # is added (out of scope for this PR).
+            await self._repo.persist_fill(
+                user_id=self._user_id,
+                fill=fill,
+                broker_order_id=order.broker_order_id,
+                account_after=PaperAccountState(
+                    cash=self._cash,
+                    realized_pnl_today=self._realized_pnl_today,
+                ),
+                position_after=self._positions.get(order.symbol),
+            )
+
         return order
 
     async def cancel_order(self, order_id: str) -> bool:

@@ -31,7 +31,7 @@ async def lifespan(_: FastAPI):
         settings.AWS_REGION,
     )
     await db.init_engines()
-    trading_runtime.init_runtime()
+    await trading_runtime.init_runtime()
     try:
         yield
     finally:

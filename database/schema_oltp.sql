@@ -398,6 +398,58 @@ CREATE TABLE kill_switch (
 CREATE INDEX idx_kill_switch_enabled ON kill_switch(enabled) WHERE enabled = TRUE;
 
 -- ================================================================
+-- 12. Paper Trading State (모의투자 상태 영속화)
+-- ================================================================
+-- Persists the in-memory PaperBroker state so an app restart doesn't
+-- wipe positions/cash/PnL. Kept separate from the orders/positions
+-- tables — those describe real-broker account state and follow a
+-- different lifecycle. Paper state is per-user, single account per
+-- user.
+
+CREATE TABLE paper_account (
+    user_id UUID PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+    cash DECIMAL(20, 4) NOT NULL,
+    realized_pnl_today DECIMAL(20, 4) NOT NULL DEFAULT 0,
+    -- Today is reset by the strategy runner at session start (00:00 KST
+    -- typically). Tracking the timestamp lets a restart figure out
+    -- whether to zero PnL or carry it.
+    pnl_reset_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE paper_position (
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    symbol VARCHAR(20) NOT NULL,
+    quantity DECIMAL(20, 8) NOT NULL,
+    avg_entry_price DECIMAL(20, 4) NOT NULL,
+    realized_pnl DECIMAL(20, 4) NOT NULL DEFAULT 0,
+    opened_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, symbol)
+);
+
+CREATE INDEX idx_paper_position_user ON paper_position(user_id);
+
+CREATE TABLE paper_fill (
+    fill_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    -- order_id is the in-process Order UUID, NOT a FK. The orders table
+    -- belongs to real-broker accounts; paper orders aren't persisted there.
+    order_id UUID NOT NULL,
+    broker_order_id VARCHAR(50) NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    side order_side NOT NULL,
+    quantity DECIMAL(20, 8) NOT NULL,
+    price DECIMAL(20, 4) NOT NULL,
+    commission DECIMAL(20, 4) NOT NULL DEFAULT 0,
+    executed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_paper_fill_user_executed ON paper_fill(user_id, executed_at DESC);
+CREATE INDEX idx_paper_fill_symbol ON paper_fill(symbol);
+
+-- ================================================================
 -- Triggers for updated_at
 -- ================================================================
 
@@ -425,6 +477,12 @@ CREATE TRIGGER update_positions_updated_at BEFORE UPDATE ON positions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_kill_switch_updated_at BEFORE UPDATE ON kill_switch
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_paper_account_updated_at BEFORE UPDATE ON paper_account
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_paper_position_updated_at BEFORE UPDATE ON paper_position
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ================================================================
