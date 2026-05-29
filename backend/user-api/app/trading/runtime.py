@@ -22,7 +22,9 @@ from typing import TYPE_CHECKING
 
 from app.core import db as db_module
 from app.core.config import settings
+from app.trading.broker import Broker
 from app.trading.killswitch import KillSwitch
+from app.trading.kis.broker import KISBroker
 from app.trading.limits import RiskLimits
 from app.trading.market_data import LatestPriceFromDB, MarketDataSource
 from app.trading.paper import PaperBroker, PaperBrokerConfig
@@ -34,7 +36,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_broker: Optional[PaperBroker] = None
+_broker: Optional[Broker] = None
 _safety: Optional[SafetyGuard] = None
 _killswitch: Optional[KillSwitch] = None
 _market_data: Optional[MarketDataSource] = None
@@ -76,23 +78,42 @@ async def init_runtime(
     _market_data = market_data or LatestPriceFromDB(db_module.TsSession)
     _killswitch = KillSwitch(db_module.OltpSession)
 
-    user_id = settings.PAPER_TRADING_USER_ID
-    if user_id is not None:
-        repo = PaperRepository(db_module.OltpSession)
-        _broker = PaperBroker(
-            market_data=_market_data,
-            config=broker_config,
-            repo=repo,
-            user_id=user_id,
+    if settings.kis_configured:
+        # KIS branch — orders go to 한국투자증권. SafetyGuard wraps it
+        # the same way it wraps PaperBroker; kill switch + risk limits
+        # still apply. KIS owns cash/positions, so PAPER_TRADING_USER_ID
+        # is intentionally ignored on this path.
+        _broker = KISBroker(
+            base_url=settings.kis_base_url,
+            app_key=settings.KIS_APP_KEY,
+            app_secret=settings.KIS_APP_SECRET,
+            account_number=settings.KIS_ACCOUNT_NUMBER,
+            account_product_code=settings.KIS_ACCOUNT_PRODUCT_CODE,
+            paper_mode=settings.KIS_PAPER_MODE,
+            timeout_seconds=settings.KIS_HTTP_TIMEOUT_SECONDS,
         )
-        await _broker.load_from_db()
         logger.info(
-            "Trading runtime initialised with DB persistence (user_id=%s)",
-            user_id,
+            "Trading runtime initialised with KISBroker (paper_mode=%s)",
+            settings.KIS_PAPER_MODE,
         )
     else:
-        _broker = PaperBroker(market_data=_market_data, config=broker_config)
-        logger.info("Trading runtime initialised (in-memory PaperBroker)")
+        user_id = settings.PAPER_TRADING_USER_ID
+        if user_id is not None:
+            repo = PaperRepository(db_module.OltpSession)
+            _broker = PaperBroker(
+                market_data=_market_data,
+                config=broker_config,
+                repo=repo,
+                user_id=user_id,
+            )
+            await _broker.load_from_db()
+            logger.info(
+                "Trading runtime initialised with DB persistence (user_id=%s)",
+                user_id,
+            )
+        else:
+            _broker = PaperBroker(market_data=_market_data, config=broker_config)
+            logger.info("Trading runtime initialised (in-memory PaperBroker)")
 
     # Limits start fully permissive — callers tighten via POST /trading/limits
     # in a later PR. Kill switch stays wired regardless.
@@ -105,14 +126,23 @@ async def init_runtime(
 
 
 def dispose_runtime() -> None:
-    """Tear down the singleton so a subsequent init starts clean.
-    Safe to call multiple times."""
+    """Clear singleton references. Does NOT close the broker — call
+    ``aclose_broker()`` first if the broker holds I/O resources (KIS
+    httpx client). Kept synchronous so sync test fixtures can reset
+    state without an event loop."""
     global _broker, _safety, _killswitch, _market_data, _strategy_runner
     _broker = None
     _safety = None
     _killswitch = None
     _market_data = None
     _strategy_runner = None
+
+
+async def aclose_broker() -> None:
+    """Close external resources the current broker owns (e.g. KIS
+    httpx client + token cache). Idempotent."""
+    if isinstance(_broker, KISBroker):
+        await _broker.aclose()
 
 
 def set_strategy_runner(runner) -> None:
@@ -134,7 +164,7 @@ def has_strategy_runner() -> bool:
     return _strategy_runner is not None
 
 
-def get_broker() -> PaperBroker:
+def get_broker() -> Broker:
     if _broker is None:
         raise RuntimeError("trading runtime not initialised")
     return _broker

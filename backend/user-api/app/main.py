@@ -49,6 +49,7 @@ async def lifespan(_: FastAPI):
         yield
     finally:
         logger.info("Shutting down %s", settings.PROJECT_NAME)
+        await trading_runtime.aclose_broker()
         trading_runtime.dispose_runtime()
         await db.dispose_engines()
 
