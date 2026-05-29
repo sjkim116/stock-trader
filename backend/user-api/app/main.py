@@ -10,9 +10,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.v1 import health
+from app.api.v1 import health, trading
 from app.core import db
 from app.core.config import settings
+from app.trading import runtime as trading_runtime
 
 logging.basicConfig(
     level=logging.INFO if settings.ENVIRONMENT != "development" else logging.DEBUG,
@@ -30,10 +31,12 @@ async def lifespan(_: FastAPI):
         settings.AWS_REGION,
     )
     await db.init_engines()
+    trading_runtime.init_runtime()
     try:
         yield
     finally:
         logger.info("Shutting down %s", settings.PROJECT_NAME)
+        trading_runtime.dispose_runtime()
         await db.dispose_engines()
 
 
@@ -55,6 +58,7 @@ app.add_middleware(
 )
 
 app.include_router(health.router, tags=["Health"])
+app.include_router(trading.router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/")
