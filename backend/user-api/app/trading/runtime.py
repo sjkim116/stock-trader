@@ -18,6 +18,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+from typing import TYPE_CHECKING
+
 from app.core import db as db_module
 from app.core.config import settings
 from app.trading.killswitch import KillSwitch
@@ -27,12 +29,20 @@ from app.trading.paper import PaperBroker, PaperBrokerConfig
 from app.trading.paper_repo import PaperRepository
 from app.trading.safety import SafetyGuard
 
+if TYPE_CHECKING:
+    from app.strategies.runner import StrategyRunner
+
 logger = logging.getLogger(__name__)
 
 _broker: Optional[PaperBroker] = None
 _safety: Optional[SafetyGuard] = None
 _killswitch: Optional[KillSwitch] = None
 _market_data: Optional[MarketDataSource] = None
+
+# Strategy runner is built lazily and may stay None for ops-only
+# deployments that just expose the trading HTTP API without running
+# strategies. Importable through ``app.trading.runtime.get_strategy_runner``.
+_strategy_runner: Optional["StrategyRunner"] = None
 
 
 async def init_runtime(
@@ -97,11 +107,31 @@ async def init_runtime(
 def dispose_runtime() -> None:
     """Tear down the singleton so a subsequent init starts clean.
     Safe to call multiple times."""
-    global _broker, _safety, _killswitch, _market_data
+    global _broker, _safety, _killswitch, _market_data, _strategy_runner
     _broker = None
     _safety = None
     _killswitch = None
     _market_data = None
+    _strategy_runner = None
+
+
+def set_strategy_runner(runner) -> None:
+    """Register the StrategyRunner singleton. Kept as a setter rather
+    than baked into init_runtime because strategy registration is
+    user-configured and shouldn't block trading-only deployments from
+    booting."""
+    global _strategy_runner
+    _strategy_runner = runner
+
+
+def get_strategy_runner():
+    if _strategy_runner is None:
+        raise RuntimeError("strategy runner not initialised")
+    return _strategy_runner
+
+
+def has_strategy_runner() -> bool:
+    return _strategy_runner is not None
 
 
 def get_broker() -> PaperBroker:
