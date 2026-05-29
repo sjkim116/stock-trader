@@ -119,21 +119,23 @@ services:
   #   networks:
   #     - algotrader-network
 
-  # Frontend (React) - 로컬 개발 시
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile.dev
-  #   container_name: algotrader-frontend
-  #   ports:
-  #     - "3000:3000"
-  #   volumes:
-  #     - ./frontend:/app
-  #     - /app/node_modules
-  #   environment:
-  #     - VITE_API_URL=http://localhost:8000
-  #   networks:
-  #     - algotrader-network
+  # Frontend (React + nginx)
+  # Built artefact served by nginx on port 80. nginx also reverse-proxies
+  # /api/* to user-api so the browser only ever talks to this one origin.
+  # For hot-reload local dev, run `npm run dev` directly in frontend/
+  # instead — that uses Vite's proxy to localhost:8000.
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: algotrader-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      user-api:
+        condition: service_healthy
+    networks:
+      - algotrader-network
 
   # PgAdmin (Optional - DB 관리 도구)
   pgadmin:
