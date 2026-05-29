@@ -74,6 +74,35 @@ class Settings(BaseSettings):
     # for ephemeral test runs and fresh local stacks.
     PAPER_TRADING_USER_ID: Optional[UUID] = None
 
+    # ------------------------------------------------------------------- KIS
+    # 한국투자증권 OpenAPI. When APP_KEY/SECRET/ACCOUNT are all set the
+    # runtime swaps PaperBroker for KISBroker — same SafetyGuard layer,
+    # same kill switch, same RiskLimits, but orders go to the broker.
+    # Default mode is "paper" (모의투자) so a misconfigured production
+    # deploy hits the test environment rather than placing live orders.
+    KIS_APP_KEY: str = ""
+    KIS_APP_SECRET: str = ""
+    KIS_ACCOUNT_NUMBER: str = ""  # CANO — 8-digit account number (no dashes)
+    KIS_ACCOUNT_PRODUCT_CODE: str = "01"  # ACNT_PRDT_CD — usually "01"
+    KIS_PAPER_MODE: bool = True
+    KIS_BASE_URL_PAPER: str = "https://openapivts.koreainvestment.com:29443"
+    KIS_BASE_URL_REAL: str = "https://openapi.koreainvestment.com:9443"
+    KIS_HTTP_TIMEOUT_SECONDS: float = 10.0
+
+    @property
+    def kis_base_url(self) -> str:
+        return (
+            self.KIS_BASE_URL_PAPER if self.KIS_PAPER_MODE else self.KIS_BASE_URL_REAL
+        )
+
+    @property
+    def kis_configured(self) -> bool:
+        """All three are required — APP_KEY without an account or vice
+        versa is a misconfig that should fall back to PaperBroker."""
+        return bool(
+            self.KIS_APP_KEY and self.KIS_APP_SECRET and self.KIS_ACCOUNT_NUMBER
+        )
+
     # ------------------------------------------------------------------ Redis
     REDIS_URL: str = "redis://:dev_password_change_me@localhost:6379"
     REDIS_TTL: int = 3600
